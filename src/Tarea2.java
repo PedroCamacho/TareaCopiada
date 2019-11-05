@@ -1,5 +1,3 @@
-
-
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Queue;
@@ -8,51 +6,49 @@ import java.util.concurrent.Semaphore;
 
 public class Tarea2 {
 	public static void main(String[] args) {
-		Barrera barrier = new Barrera(5, 2);
-		Vehiculo[] cola = new Vehiculo[5];
-		for (int i = 1; i < 6; i++) {
-			Vehiculo coche = new Vehiculo(i, barrier);
-			cola[i - 1] = coche;
+		Barrera barrera = new Barrera(4, 3);
+		Coche[] lista = new Coche[4];
+		for (int i = 1; i <= 4; i++) {
+			Coche coche = new Coche(i, barrera);
+			lista[i - 1] = coche;
 		}
-		for (Vehiculo coche : cola) {
-			coche.start();
+		for (Coche vehiculo : lista) {
+			vehiculo.start();
 		}
-		barrier.nextCoche();
 	}
 }
 
-class Vehiculo extends Thread {
-
+class Coche extends Thread {
 	private int plaza;
-	private int identificador;
+	private int id;
 	private Barrera barrera;
 	private int entrada;
 	private int salida;
 
-	public Vehiculo(int id, Barrera barrier) {
-		this.identificador = id;
-		this.barrera = barrier;
-		Random randomGenerator = new Random();
-		entrada = randomGenerator.nextInt(3000) + 1;
-		salida = randomGenerator.nextInt(3000) + 1;
+	public Coche(int id, Barrera barrera) {
+		this.id = id;
+		this.barrera = barrera;
+		Random random = new Random();
+		entrada = random.nextInt(2000) + 1;
+		salida = random.nextInt(2000) + 1;
+	}
+
+	public void entra(int plaza) {
+		this.plaza = plaza;
+	}
+
+	public int sale() {
+		return this.plaza;
+	}
+
+	public int getID() {
+		return this.id;
 	}
 
 	@Override
 	public void run() {
-		barrera.pedir(this);
-		barrera.nextCoche();
-	}
-
-	public void aparcar(int plaza) {
-		this.plaza = plaza;
-	}
-
-	public int salir() {
-		return this.plaza;
-	}
-
-	public int getIdentificador() {
-		return this.identificador;
+		barrera.llega(this);
+		barrera.siguiente();
 	}
 
 	public int getEntrada() {
@@ -73,85 +69,81 @@ class Vehiculo extends Thread {
 }
 
 class Barrera {
-
 	private Semaphore semaforo;
-	private Vehiculo[] aparcados;
-	private Queue<Integer> pendientes;
-	private Queue<Integer> plazasLibres;
-	private HashMap<Integer, Vehiculo> lista = new HashMap<Integer, Vehiculo>();
+	private Coche[] aparcados;
+	private LinkedList<Integer> esperando;
+	private LinkedList<Integer> plazasLibres;
+	private HashMap<Integer, Coche> listaCoches = new HashMap<Integer, Coche>();
 	private int total;
 
-	public Barrera(int vehiculos, int plazas) {
+	public Barrera(int coches, int plazas) {
 		semaforo = new Semaphore(plazas);
-		pendientes = new LinkedList<Integer>();
+		esperando = new LinkedList<Integer>();
 		plazasLibres = new LinkedList<Integer>();
-		total = vehiculos;
-		aparcados = new Vehiculo[plazas];
+		total = coches;
+		aparcados = new Coche[plazas];
 		for (int i = 0; i < plazas; i++) {
 			plazasLibres.add(i);
 		}
 	}
 
-	public boolean isLlena() {
-		return pendientes.size() == this.total;
-	}
-
-	@SuppressWarnings("static-access")
-	public void entrar(Integer coche) {
+	public void entra(Integer num) {
 		try {
 			semaforo.acquire();
-			Vehiculo vehiculo = lista.get(coche);
+			Coche coche = listaCoches.get(num);
 			int plaza = plazasLibres.poll();
 
-			vehiculo.aparcar(plaza);
-			aparcados[plaza] = vehiculo;
-			System.out.println("Coche " + vehiculo.getIdentificador() + " aparcando en la plaza " + plaza);
-			estado();
-
+			coche.entra(plaza);
+			aparcados[plaza] = coche;
+			System.out.println("el coche " + coche.getID() + " ha aparca en la plaza " + plaza);
+			aparcado();
 			plazasLibres.add(plaza);
-			vehiculo.sleep(vehiculo.getSalida());
-			System.out.println("Coche " + vehiculo.getIdentificador() + " saliendo de la plaza " + vehiculo.salir());
-			aparcados[vehiculo.salir()] = null;
-			estado();
-
+			Coche.sleep(coche.getSalida());
+			System.out.println("el coche " + coche.getID() + " ha salido de la plaza " + coche.sale());
+			aparcados[coche.sale()] = null;
+			aparcado();
 			semaforo.release();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
 	}
 
-	@SuppressWarnings("static-access")
-	public void pedir(Vehiculo coche) {
+	public boolean isLlena() {
+		return esperando.size() == this.total;
+	}
+
+	public void llega(Coche coche) {
 		try {
-			coche.sleep(coche.getEntrada());
+			Coche.sleep(coche.getEntrada());
 			semaforo.acquire();
-			this.pendientes.add(coche.getIdentificador());
-			this.lista.put(coche.getIdentificador(), coche);
+			this.esperando.add(coche.getID());
+			this.listaCoches.put(coche.getID(), coche);
 			semaforo.release();
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
 	}
-	public boolean isPendientes() {
-		return !pendientes.isEmpty();
+
+	public boolean isPendiente() {
+		return !esperando.isEmpty();
 	}
 
-	public void estado() {
-		String state = " ";
+	public void aparcado() {
+		String aparcado = "";
 		for (int i = 0; i < aparcados.length; i++) {
 			if (aparcados[i] != null) {
-				state += "[" + aparcados[i].getIdentificador() + "] ";
+				aparcado += "[" + aparcados[i].getID() + "] ";
 			} else {
-				state += "[] ";
+				aparcado += "[] ";
 			}
 		}
-		System.out.println(state);
+		System.out.println(aparcado);
 	}
 
-	public void nextCoche() {
-		while (isPendientes()) {
-			Integer coche = pendientes.poll();
-			entrar(coche);
+	public void siguiente() {
+		while (isPendiente()) {
+			Integer num = esperando.poll();
+			entra(num);
 		}
 	}
 }
